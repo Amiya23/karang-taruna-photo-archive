@@ -1,12 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import {
-  photoPublicUrl,
   type GalleryPhoto,
 } from "@/lib/supabase/queries";
 
 type HeroProps = {
-  photos: GalleryPhoto[];
+  photos: (GalleryPhoto & { url: string })[];
   yearsCount: number;
 };
 
@@ -99,7 +98,7 @@ function PhotoTile({
   photo,
   className,
 }: {
-  photo: GalleryPhoto;
+  photo: GalleryPhoto & { url: string };
   className?: string;
 }) {
   return (
@@ -107,7 +106,7 @@ function PhotoTile({
       className={`absolute overflow-hidden rounded-2xl shadow-2xl shadow-navy-950/70 ring-1 ring-white/25 ${className}`}
     >
       <Image
-        src={photoPublicUrl(photo.storagePath)}
+        src={photo.url}
         alt={photo.caption ?? photo.filename}
         fill
         sizes="(max-width: 640px) 45vw, 240px"

@@ -40,16 +40,27 @@ export async function GET(
     return new Response("Not found", { status: 404 });
   }
 
-  const { data: file, error: downloadError } = await supabase.storage
-    .from("photos")
-    .download(photo.storage_path);
+  let bytes: ArrayBuffer;
+  let contentType: string;
 
-  if (downloadError || !file) {
-    return new Response("Not found", { status: 404 });
+  if (photo.storage_path.startsWith("b2:")) {
+    const { getObjectBytes } = await import("@/lib/b2/storage");
+    const { stripB2Prefix } = await import("@/lib/b2/path");
+    const data = await getObjectBytes(stripB2Prefix(photo.storage_path));
+    bytes = new Uint8Array(data).buffer;
+    contentType = "image/jpeg";
+  } else {
+    const { data: file, error: downloadError } = await supabase.storage
+      .from("photos")
+      .download(photo.storage_path);
+
+    if (downloadError || !file) {
+      return new Response("Not found", { status: 404 });
+    }
+
+    bytes = await file.arrayBuffer();
+    contentType = file.type || "application/octet-stream";
   }
-
-  const bytes = await file.arrayBuffer();
-  const contentType = file.type || "application/octet-stream";
 
   return new Response(bytes, {
     status: 200,

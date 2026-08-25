@@ -3,7 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { checkUserAdmin } from "@/lib/is-admin";
-import { removePhotoObjects } from "@/lib/storage-cleanup";
+import { removePhotoObjectsHybrid } from "@/lib/storage-cleanup-hybrid";
+import { uploadObject, deleteObject } from "@/lib/b2/storage";
+import { isB2Path, stripB2Prefix } from "@/lib/b2/path";
+
+/** Server-side feature flag: route NEW uploads to B2 when enabled. */
+function b2UploadEnabled(): boolean {
+  return process.env.B2_UPLOAD_ENABLED === "true";
+}
 
 export type ActionState = { ok: boolean; message: string } | null;
 
@@ -177,7 +184,7 @@ export async function deleteArchive(
     // Storage-first: remove blobs before deleting rows. If Storage fails we
     // abort and leave the database intact (avoids broken public gallery images).
     if (photoPaths.length > 0) {
-      const cleanup = await removePhotoObjects(supabase, photoPaths);
+      const cleanup = await removePhotoObjectsHybrid(supabase, photoPaths);
       if (!cleanup.ok) {
         console.error(
           "[deleteArchive] storage cleanup failed; aborting",
@@ -318,6 +325,118 @@ export async function setEventCover(
   }
 }
 
+/**
+ * Upload a NEW photo to Backblaze B2 and insert the DB row.
+ *
+ * Hybrid strategy: when B2_UPLOAD_ENABLED is true, new uploads go to B2 and are
+ * stored with a "b2:"-prefixed storage_path. Legacy/unprefixed paths remain
+ * Supabase Storage. B2 credentials stay server-side (this is a server action).
+ *
+ * Rollback: if the DB insert fails after a successful B2 upload, the orphan B2
+ * object is deleted so we never leave dangling blobs.
+ */
+const B2_ACCEPTED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const B2_MAX_SIZE = 10 * 1024 * 1024;
+
+function sanitizePhotoFilename(name: string): string {
+  const dot = name.lastIndexOf(".");
+  const rawExt = dot >= 0 ? name.slice(dot).toLowerCase() : "";
+  const ext = /^.(jpe?g|png|webp)$/.test(rawExt) ? rawExt : "";
+  const base = (dot >= 0 ? name.slice(0, dot) : name)
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+  return `${base || "foto"}${ext}`;
+}
+
+export type UploadPhotoState = { ok: boolean; message: string };
+
+export async function uploadPhotoToB2(
+  _prev: UploadPhotoState,
+  formData: FormData
+): Promise<UploadPhotoState> {
+  try {
+    if (!b2UploadEnabled()) {
+      return { ok: false, message: "Upload B2 tidak diaktifkan." };
+    }
+
+    const supabase = await requireAdminClient();
+
+    const eventId = readString(formData, "eventId");
+    const year = readString(formData, "year");
+    const file = formData.get("file");
+
+    if (!eventId || !year) {
+      return { ok: false, message: "Parameter tidak valid." };
+    }
+    if (!(file instanceof File)) {
+      return { ok: false, message: "File tidak ditemukan." };
+    }
+    if (!B2_ACCEPTED_TYPES.has(file.type)) {
+      return { ok: false, message: "Tipe tidak didukung (hanya JPEG/PNG/WebP)." };
+    }
+    if (file.size > B2_MAX_SIZE) {
+      return { ok: false, message: "Ukuran melebihi 10 MB." };
+    }
+    if (file.size === 0) {
+      return { ok: false, message: "File kosong." };
+    }
+
+    // Verify the event exists (authz preserved by requireAdminClient).
+    const { data: event, error: eventError } = await supabase
+      .from("events")
+      .select("id, cover_image")
+      .eq("id", eventId)
+      .maybeSingle();
+    if (eventError) throw eventError;
+    if (!event) return { ok: false, message: "Event tidak ditemukan." };
+
+    const key = `${year}/${eventId}/${Date.now()}-${sanitizePhotoFilename(
+      file.name
+    )}`;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+
+    // Storage-first: upload blob before inserting the DB row.
+    await uploadObject(key, bytes, file.type || "image/jpeg");
+
+    const storagePath = `b2:${key}`;
+    const { error: insertError } = await supabase.from("photos").insert({
+      event_id: eventId,
+      storage_path: storagePath,
+      filename: file.name,
+    });
+
+    if (insertError) {
+      // Rollback the orphan B2 object.
+      try {
+        await deleteObject(key);
+      } catch {
+        console.error("[uploadPhotoToB2] rollback gagal hapus B2 object", {
+          key,
+        });
+      }
+      return { ok: false, message: "Gagal menyimpan metadata foto." };
+    }
+
+    // Auto-cover: only if the event has no cover yet (mirrors existing behavior).
+    if (!event.cover_image) {
+      const { error: coverError } = await supabase
+        .from("events")
+        .update({ cover_image: storagePath })
+        .eq("id", eventId);
+      if (coverError) {
+        console.warn("[uploadPhotoToB2] gagal set cover otomatis", coverError);
+      }
+    }
+
+    invalidateAll();
+    return { ok: true, message: "Foto berhasil diunggah ke B2." };
+  } catch {
+    return { ok: false, message: "Gagal mengunggah foto ke B2." };
+  }
+}
+
 export async function deleteEvent(
   _prev: ActionState,
   formData: FormData
@@ -351,7 +470,7 @@ export async function deleteEvent(
     // Storage-first: remove blobs before deleting rows. If Storage fails we
     // abort and leave the database intact (avoids broken public gallery images).
     if (photoPaths.length > 0) {
-      const cleanup = await removePhotoObjects(supabase, photoPaths);
+      const cleanup = await removePhotoObjectsHybrid(supabase, photoPaths);
       if (!cleanup.ok) {
         console.error(
           "[deleteEvent] storage cleanup failed; aborting",
@@ -413,14 +532,29 @@ export async function deletePhotoById(
       .maybeSingle();
     if (eventError) throw eventError;
 
-    const { error: storageError } = await supabase.storage
-      .from("photos")
-      .remove([photo.storage_path]);
-    if (storageError)
-      return {
-        ok: false,
-        message: `Gagal menghapus file dari storage: ${storageError.message}`,
-      };
+    const sp = photo.storage_path;
+
+    if (isB2Path(sp)) {
+      // B2 object: delete via the adapter (credentials stay server-side).
+      try {
+        await deleteObject(stripB2Prefix(sp));
+      } catch {
+        return {
+          ok: false,
+          message:
+            "Gagal menghapus file dari storage B2. Penghapusan foto dibatalkan.",
+        };
+      }
+    } else {
+      const { error: storageError } = await supabase.storage
+        .from("photos")
+        .remove([sp]);
+      if (storageError)
+        return {
+          ok: false,
+          message: `Gagal menghapus file dari storage: ${storageError.message}`,
+        };
+    }
 
     const { error: dbError } = await supabase
       .from("photos")

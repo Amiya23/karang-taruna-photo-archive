@@ -5,10 +5,13 @@ import { resolveImageUrl, type EventSummary } from "@/lib/supabase/queries";
 export function EventCard({
   event,
   year,
+  coverUrl,
 }: {
   event: EventSummary;
   year: number;
+  coverUrl?: string;
 }) {
+  const coverSrc = coverUrl ?? (event.coverImage ? resolveImageUrl(event.coverImage) : null);
   return (
     <Link
       href={`/archive/${year}/${event.slug}`}
@@ -18,7 +21,7 @@ export function EventCard({
         {event.coverImage ? (
           <>
             <Image
-              src={resolveImageUrl(event.coverImage)}
+              src={coverSrc ?? resolveImageUrl(event.coverImage)}
               alt={`Cover acara ${event.name}`}
               fill
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
-import { revalidatePublicPages } from "@/app/admin/(panel)/archives/actions";
+import { revalidatePublicPages, uploadPhotoToB2 } from "@/app/admin/(panel)/archives/actions";
 
 type UploadStatus = "queued" | "uploading" | "success" | "failed";
 
@@ -83,10 +83,12 @@ export function PhotoUploader({
   year,
   eventId,
   eventCover,
+  b2Enabled = false,
 }: {
   year: number;
   eventId: string;
   eventCover: string | null;
+  b2Enabled?: boolean;
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -154,6 +156,53 @@ export function PhotoUploader({
     setIsUploading(true);
     setSummary(null);
     setOverall({ done: 0, total: pending.length });
+
+    // --- B2 path: NEW uploads routed to Backblaze B2 via a server action. ---
+    // Credentials never reach the browser; the server action uploads the bytes.
+    // No native upload progress is available, so we use a truthful "Mengunggah…"
+    // state (no fake percentage).
+    if (b2Enabled) {
+      let successCount = 0;
+      let failCount = 0;
+      for (const job of pending) {
+        updateItem(job.id, { status: "uploading", progress: 0, error: undefined });
+        const formData = new FormData();
+        formData.append("eventId", eventId);
+        formData.append("year", String(year));
+        formData.append("file", job.file);
+        try {
+          const result = await uploadPhotoToB2(
+            { ok: false, message: "" },
+            formData
+          );
+          if (result.ok) {
+            updateItem(job.id, { status: "success", progress: 100 });
+            successCount += 1;
+          } else {
+            updateItem(job.id, {
+              status: "failed",
+              error: result.message || "Upload gagal",
+            });
+            failCount += 1;
+          }
+        } catch {
+          updateItem(job.id, { status: "failed", error: "Upload gagal" });
+          failCount += 1;
+        }
+        setOverall({ done: successCount + failCount, total: pending.length });
+      }
+
+      setSummary({ success: successCount, failed: failCount });
+      setIsUploading(false);
+      runningRef.current = false;
+      if (successCount > 0) {
+        try {
+          await revalidatePublicPages();
+        } catch {}
+        router.refresh();
+      }
+      return;
+    }
 
     const supabase = createClient();
     const { data: sessionData } = await supabase.auth.getSession();
@@ -274,7 +323,7 @@ export function PhotoUploader({
       } catch {}
       router.refresh();
     }
-  }, [eventId, eventCover, queue, router, updateItem, year]);
+  }, [b2Enabled, eventId, eventCover, queue, router, updateItem, year]);
 
   const queuedCount = queue.filter((item) => item.status === "queued").length;
   const overallPercent =

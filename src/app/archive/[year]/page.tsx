@@ -6,6 +6,7 @@ import { SiteFooter } from "@/components/site/site-footer";
 import { EventCard } from "@/components/archive/event-card";
 import { EventsEmptyState } from "@/components/archive/events-empty-state";
 import { getArchiveByYear, getEventsByArchive } from "@/lib/supabase/queries";
+import { resolvedImageUrl } from "@/lib/photo-url-server";
 import { parseYearParam as parseYear } from "@/lib/route-params";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +37,14 @@ export default async function YearPage({ params }: PageProps) {
   if (!archive) notFound();
 
   const events = await getEventsByArchive(archive.id);
+  const eventsWithCover = await Promise.all(
+    events.map(async (event) => ({
+      event,
+      coverUrl: event.coverImage
+        ? await resolvedImageUrl(event.coverImage)
+        : undefined,
+    }))
+  );
   const totalPhotos = events.reduce((sum, event) => sum + event.photoCount, 0);
 
   return (
@@ -96,13 +105,13 @@ export default async function YearPage({ params }: PageProps) {
             <EventsEmptyState year={archive.year} />
           ) : (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {events.map((event, index) => (
+              {eventsWithCover.map(({ event, coverUrl }, index) => (
                 <div
                   key={event.id}
                   className="animate-fade-up"
                   style={{ animationDelay: `${Math.min(index, 7) * 60}ms` }}
                 >
-                  <EventCard event={event} year={archive.year} />
+                  <EventCard event={event} year={archive.year} coverUrl={coverUrl} />
                 </div>
               ))}
             </div>

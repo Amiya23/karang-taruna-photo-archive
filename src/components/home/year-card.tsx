@@ -5,7 +5,8 @@ import {
   type ArchiveSummary,
 } from "@/lib/supabase/queries";
 
-export function YearCard({ archive }: { archive: ArchiveSummary }) {
+export function YearCard({ archive, coverUrl }: { archive: ArchiveSummary; coverUrl?: string }) {
+  const coverSrc = coverUrl ?? (archive.coverImage ? resolveImageUrl(archive.coverImage) : null);
   return (
     <Link
       href={`/archive/${archive.year}`}
@@ -15,7 +16,7 @@ export function YearCard({ archive }: { archive: ArchiveSummary }) {
         {archive.coverImage ? (
           <>
             <Image
-              src={resolveImageUrl(archive.coverImage)}
+              src={coverSrc ?? resolveImageUrl(archive.coverImage)}
               alt={`Cover arsip tahun ${archive.year}`}
               fill
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"

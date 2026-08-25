@@ -4,6 +4,7 @@ import { SiteFooter } from "@/components/site/site-footer";
 import { YearCard } from "@/components/home/year-card";
 import { ArchiveEmptyState } from "@/components/shared/archive-empty-state";
 import { getArchives } from "@/lib/supabase/queries";
+import { resolvedImageUrl } from "@/lib/photo-url-server";
 
 export const revalidate = 300;
 
@@ -15,6 +16,14 @@ export const metadata: Metadata = {
 
 export default async function ArchivePage() {
   const archives = await getArchives();
+  const archivesWithCover = await Promise.all(
+    archives.map(async (archive) => ({
+      archive,
+      coverUrl: archive.coverImage
+        ? await resolvedImageUrl(archive.coverImage)
+        : undefined,
+    }))
+  );
 
   return (
     <div className="flex min-h-screen flex-col bg-offwhite">
@@ -55,13 +64,13 @@ export default async function ArchivePage() {
             <ArchiveEmptyState />
           ) : (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {archives.map((archive, index) => (
+              {archivesWithCover.map(({ archive, coverUrl }, index) => (
                 <div
                   key={archive.id}
                   className="animate-fade-up"
                   style={{ animationDelay: `${Math.min(index, 7) * 60}ms` }}
                 >
-                  <YearCard archive={archive} />
+                  <YearCard archive={archive} coverUrl={coverUrl} />
                 </div>
               ))}
             </div>

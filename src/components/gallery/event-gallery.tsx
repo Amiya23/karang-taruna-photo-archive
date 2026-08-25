@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
-import { photoPublicUrl } from "@/lib/photo-url";
+import { usePhotoUrl } from "@/lib/use-photo-url";
 import type { EventPhoto } from "@/lib/supabase/queries";
 
 type EventGalleryProps = {
@@ -72,15 +72,11 @@ export function EventGallery({ photos, eventName, year }: EventGalleryProps) {
               aria-label={`Lihat foto ${index + 1} dari ${photos.length}`}
               className="group relative mb-4 block w-full cursor-zoom-in break-inside-avoid overflow-hidden rounded-xl bg-cloudgray ring-1 ring-black/5 transition duration-300 hover:ring-gold-500/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-500 sm:mb-5"
             >
-              <Image
-                src={photoPublicUrl(photo.storagePath)}
+              <GalleryImage
+                storagePath={photo.storagePath}
                 alt={photo.caption || photo.filename || `Foto ${index + 1}`}
                 width={960}
                 height={960}
-                sizes="(max-width: 768px) 50vw, (max-width: 1280px) 33vw, 25vw"
-                className={`h-auto w-full transition duration-500 group-hover:scale-[1.03] ${
-                  loaded ? "opacity-100" : "opacity-0"
-                }`}
                 onLoad={() => markLoaded(photo.id)}
               />
               {!loaded ? (
@@ -147,24 +143,14 @@ export function EventGallery({ photos, eventName, year }: EventGalleryProps) {
           </div>
 
           <div
-            className="relative mx-auto min-h-0 w-full max-w-5xl flex-1 px-14 sm:px-20"
+            className="relative flex min-h-0 flex-1 items-center gap-2 px-2 sm:px-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <Image
-              key={activePhoto.id}
-              src={photoPublicUrl(activePhoto.storagePath)}
-              alt={activePhoto.caption || activePhoto.filename || "Foto"}
-              fill
-              priority
-              sizes="(max-width: 1024px) 100vw, 1024px"
-              className="animate-fade-up object-contain"
-            />
-
             <button
               type="button"
               onClick={showPrev}
               aria-label="Foto sebelumnya"
-              className="absolute left-0 top-1/2 -translate-y-1/2 rounded-full border border-white/25 bg-white/10 p-3 text-offwhite transition-colors hover:bg-white/20"
+              className="shrink-0 rounded-full border border-white/25 bg-white/10 p-3 text-offwhite transition-colors hover:bg-white/20"
             >
               <svg
                 viewBox="0 0 24 24"
@@ -177,11 +163,23 @@ export function EventGallery({ photos, eventName, year }: EventGalleryProps) {
                 <path d="M15 6l-6 6 6 6" />
               </svg>
             </button>
+
+            <div className="relative mx-auto min-h-0 w-full max-w-5xl flex-1 self-stretch">
+              <GalleryImage
+                storagePath={activePhoto.storagePath}
+                alt={activePhoto.caption || activePhoto.filename || "Foto"}
+                fill
+                priority
+                sizes="(max-width: 1024px) 100vw, 1024px"
+                className="animate-fade-up object-contain"
+              />
+            </div>
+
             <button
               type="button"
               onClick={showNext}
               aria-label="Foto berikutnya"
-              className="absolute right-0 top-1/2 -translate-y-1/2 rounded-full border border-white/25 bg-white/10 p-3 text-offwhite transition-colors hover:bg-white/20"
+              className="shrink-0 rounded-full border border-white/25 bg-white/10 p-3 text-offwhite transition-colors hover:bg-white/20"
             >
               <svg
                 viewBox="0 0 24 24"
@@ -210,5 +208,51 @@ export function EventGallery({ photos, eventName, year }: EventGalleryProps) {
         </div>
       ) : null}
     </>
+  );
+}
+
+/**
+ * Resolves a photo's storage_path to a renderable image URL via usePhotoUrl
+ * (legacy Supabase public URL, or a server-generated B2 presigned URL). Keeping
+ * the resolution in a child component lets us call the hook per-photo while the
+ * parent maps over the list.
+ */
+function GalleryImage({
+  storagePath,
+  alt,
+  fill,
+  priority,
+  sizes,
+  className,
+  onLoad,
+  width,
+  height,
+}: {
+  storagePath: string;
+  alt: string;
+  fill?: boolean;
+  priority?: boolean;
+  sizes?: string;
+  className?: string;
+  onLoad?: () => void;
+  width?: number;
+  height?: number;
+}) {
+  const url = usePhotoUrl(storagePath);
+  if (!url) {
+    return <div className="absolute inset-0 animate-pulse bg-cloudgray" />;
+  }
+  return (
+    <Image
+      src={url}
+      alt={alt}
+      fill={fill}
+      priority={priority}
+      sizes={sizes}
+      width={width}
+      height={height}
+      className={className}
+      onLoad={onLoad}
+    />
   );
 }

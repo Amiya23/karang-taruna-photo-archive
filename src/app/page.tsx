@@ -3,6 +3,7 @@ import { SiteFooter } from "@/components/site/site-footer";
 import { HomeHero } from "@/components/home/hero";
 import { ArchiveSection } from "@/components/home/archive-section";
 import { getArchives, getGalleryHighlights } from "@/lib/supabase/queries";
+import { resolvedImageUrl } from "@/lib/photo-url-server";
 
 export const revalidate = 300;
 
@@ -12,11 +13,15 @@ export default async function HomePage() {
     getGalleryHighlights(6),
   ]);
 
+  const heroPhotos = await Promise.all(
+    photos.map(async (p) => ({ ...p, url: await resolvedImageUrl(p.storagePath) }))
+  );
+
   return (
     <div className="flex min-h-screen flex-col bg-offwhite">
       <SiteHeader />
       <main className="flex-1">
-        <HomeHero photos={photos} yearsCount={archives.length} />
+        <HomeHero photos={heroPhotos} yearsCount={archives.length} />
         <ArchiveSection archives={archives} />
       </main>
       <SiteFooter />

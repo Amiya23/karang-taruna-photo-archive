@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
-import { resolveImageUrl } from "@/lib/photo-url";
+import { usePhotoUrl } from "@/lib/use-photo-url";
 import { deletePhotoById } from "@/app/admin/(panel)/archives/actions";
 
 type ManagerPhoto = {
@@ -136,15 +136,7 @@ export function PhotoManager({ eventId }: { eventId: string }) {
               key={photo.id}
               className="group relative aspect-square overflow-hidden rounded-lg ring-1 ring-black/10"
             >
-              <Image
-                src={resolveImageUrl(photo.storagePath)}
-                alt={photo.filename || "Foto event"}
-                fill
-                sizes="(max-width: 640px) 33vw, (max-width: 1024px) 25vw, 160px"
-                className={`object-cover transition-opacity ${
-                  deletingId === photo.id ? "opacity-40" : "opacity-100"
-                }`}
-              />
+              <ManagerPhotoImage storagePath={photo.storagePath} alt={photo.filename || "Foto event"} dimmed={deletingId === photo.id} />
 
               {deletingId === photo.id ? (
                 <div className="absolute inset-0 flex items-center justify-center">
@@ -176,5 +168,30 @@ export function PhotoManager({ eventId }: { eventId: string }) {
         </div>
       )}
     </div>
+  );
+}
+
+/** Per-photo thumbnail that resolves B2 presigned URLs server-side via usePhotoUrl. */
+function ManagerPhotoImage({
+  storagePath,
+  alt,
+  dimmed,
+}: {
+  storagePath: string;
+  alt: string;
+  dimmed: boolean;
+}) {
+  const url = usePhotoUrl(storagePath);
+  if (!url) {
+    return <div className="absolute inset-0 animate-pulse bg-cloudgray" />;
+  }
+  return (
+    <Image
+      src={url}
+      alt={alt}
+      fill
+      sizes="(max-width: 640px) 33vw, (max-width: 1024px) 25vw, 160px"
+      className={`object-cover transition-opacity ${dimmed ? "opacity-40" : "opacity-100"}`}
+    />
   );
 }

@@ -227,7 +227,11 @@ export async function getStorageUsageBytes(): Promise<number> {
   try {
     const supabase = createPublicClient();
     const bucket = "photos";
-    return await sumPrefix(supabase, bucket, "");
+    const supabaseBytes = await sumPrefix(supabase, bucket, "");
+    // Hybrid storage: also count Backblaze B2 objects (no schema change).
+    const { getB2UsageBytes } = await import("@/lib/b2/storage");
+    const b2Bytes = await getB2UsageBytes();
+    return supabaseBytes + b2Bytes;
   } catch (error) {
     console.error("[getStorageUsageBytes]", error);
     return 0;

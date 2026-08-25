@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { getAdminStats, getRecentArchives, getStorageUsageBytes } from "@/lib/supabase/queries";
+import { getAdminStats, getRecentArchives } from "@/lib/supabase/queries";
+import { getStorageUsageBytesCached } from "@/lib/storage-usage-cache";
 import { formatBytes } from "@/lib/storage-format";
 
 export const dynamic = "force-dynamic";
@@ -49,7 +50,7 @@ export default async function AdminDashboardPage() {
   const [stats, recentArchives, storageBytes] = await Promise.all([
     getAdminStats(),
     getRecentArchives(5),
-    getStorageUsageBytes(),
+    getStorageUsageBytesCached(),
   ]);
 
   const displayName = user?.email?.split("@")[0] ?? "Admin";

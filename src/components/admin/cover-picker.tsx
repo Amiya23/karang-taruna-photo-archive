@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
-import { resolveImageUrl } from "@/lib/photo-url";
+import { usePhotoUrl } from "@/lib/use-photo-url";
 import { setEventCover } from "@/app/admin/(panel)/archives/actions";
 
 type CoverPhoto = {
@@ -146,13 +146,7 @@ export function CoverPicker({
                       : "ring-black/10 hover:ring-navy-600/40"
                   } ${pendingId !== null ? "opacity-70" : ""}`}
                 >
-                  <Image
-                    src={resolveImageUrl(photo.storagePath)}
-                    alt={photo.filename || "Foto event"}
-                    fill
-                    sizes="(max-width: 640px) 33vw, 160px"
-                    className="object-cover"
-                  />
+                  <CoverPhotoImage storagePath={photo.storagePath} alt={photo.filename || "Foto event"} />
                   {isCover ? (
                     <span className="absolute bottom-1 left-1 rounded-full bg-gold-500 px-2 py-0.5 text-[10px] font-semibold text-navy-950">
                       Cover
@@ -170,5 +164,22 @@ export function CoverPicker({
         </>
       )}
     </div>
+  );
+}
+
+/** Per-photo thumbnail that resolves B2 presigned URLs server-side via usePhotoUrl. */
+function CoverPhotoImage({ storagePath, alt }: { storagePath: string; alt: string }) {
+  const url = usePhotoUrl(storagePath);
+  if (!url) {
+    return <div className="absolute inset-0 animate-pulse bg-cloudgray" />;
+  }
+  return (
+    <Image
+      src={url}
+      alt={alt}
+      fill
+      sizes="(max-width: 640px) 33vw, 160px"
+      className="object-cover"
+    />
   );
 }
