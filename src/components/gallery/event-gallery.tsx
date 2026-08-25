@@ -106,6 +106,27 @@ export function EventGallery({ photos, eventName, year }: EventGalleryProps) {
             <span className="text-xs uppercase tracking-[0.2em] text-offwhite/60">
               {activeIndex! + 1} / {photos.length}
             </span>
+            <a
+              href={`/api/photos/${activePhoto.id}/download`}
+              download
+              aria-label={`Unduh foto ${activeIndex! + 1}`}
+              title="Unduh foto"
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/25 bg-white/10 px-3 py-2 text-xs font-medium text-offwhite transition-colors hover:bg-white/20"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                className="h-4 w-4"
+                aria-hidden
+              >
+                <path d="M12 4v10m0 0 4-4m-4 4-4-4" />
+                <path d="M5 19h14" />
+              </svg>
+              Unduh
+            </a>
+
             <button
               type="button"
               onClick={close}
