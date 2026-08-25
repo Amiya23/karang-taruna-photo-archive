@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { checkUserAdmin } from "@/lib/is-admin";
+import { removePhotoObjects } from "@/lib/storage-cleanup";
 
 export type ActionState = { ok: boolean; message: string } | null;
 
@@ -143,6 +144,16 @@ export async function deleteArchive(
     const id = readString(formData, "id");
     if (!id) return { ok: false, message: "ID arsip tidak valid." };
 
+    const { data: archive, error: archiveError } = await supabase
+      .from("archives")
+      .select("id")
+      .eq("id", id)
+      .maybeSingle();
+    if (archiveError) throw archiveError;
+    if (!archive)
+      return { ok: false, message: "Arsip tidak ditemukan." };
+
+    // Collect every photo storage_path under this archive (via its events).
     const { data: events, error: eventsError } = await supabase
       .from("events")
       .select("id")
@@ -150,23 +161,37 @@ export async function deleteArchive(
     if (eventsError) throw eventsError;
 
     const eventIds = (events ?? []).map((row) => row.id);
-    let photoCount = 0;
+    let photoPaths: string[] = [];
 
     if (eventIds.length > 0) {
-      const { count, error: photosError } = await supabase
+      const { data: photos, error: photosError } = await supabase
         .from("photos")
-        .select("id", { count: "exact", head: true })
+        .select("storage_path")
         .in("event_id", eventIds);
       if (photosError) throw photosError;
-      photoCount = count ?? 0;
+      photoPaths = (photos ?? [])
+        .map((row) => row.storage_path)
+        .filter((p): p is string => typeof p === "string" && p.length > 0);
     }
 
-    if (photoCount > 0)
-      return {
-        ok: false,
-        message: `Tidak aman menghapus: masih ada ${photoCount} foto pada tahun ini. Hapus foto terlebih dahulu (fitur menyusul).`,
-      };
+    // Storage-first: remove blobs before deleting rows. If Storage fails we
+    // abort and leave the database intact (avoids broken public gallery images).
+    if (photoPaths.length > 0) {
+      const cleanup = await removePhotoObjects(supabase, photoPaths);
+      if (!cleanup.ok) {
+        console.error(
+          "[deleteArchive] storage cleanup failed; aborting",
+          { archiveId: id, failedCount: cleanup.failed.length }
+        );
+        return {
+          ok: false,
+          message:
+            "Gagal menghapus file foto dari storage. Penghapusan arsip dibatalkan agar data tidak rusak. Coba lagi.",
+        };
+      }
+    }
 
+    // FK CASCADE handles events -> photos rows.
     const { error } = await supabase.from("archives").delete().eq("id", id);
     if (error) throw error;
 
@@ -187,7 +212,6 @@ export async function createEvent(
     const archiveId = readString(formData, "archiveId");
     const name = readString(formData, "name");
     const description = readString(formData, "description");
-    const coverImage = readString(formData, "coverImage");
 
     if (!archiveId) return { ok: false, message: "Arsip tidak valid." };
     if (!name) return { ok: false, message: "Nama event wajib diisi." };
@@ -195,14 +219,11 @@ export async function createEvent(
       return { ok: false, message: "Nama event maksimal 120 karakter." };
     if (description.length > 500)
       return { ok: false, message: "Deskripsi maksimal 500 karakter." };
-    if (coverImage.length > 500)
-      return { ok: false, message: "URL cover maksimal 500 karakter." };
 
     const { error } = await supabase.from("events").insert({
       archive_id: archiveId,
       name,
       description: description || null,
-      cover_image: coverImage || null,
     });
     if (error) throw error;
 
@@ -226,7 +247,6 @@ export async function updateEvent(
     const id = readString(formData, "id");
     const name = readString(formData, "name");
     const description = readString(formData, "description");
-    const coverImage = readString(formData, "coverImage");
 
     if (!id) return { ok: false, message: "ID event tidak valid." };
     if (!name) return { ok: false, message: "Nama event wajib diisi." };
@@ -234,15 +254,12 @@ export async function updateEvent(
       return { ok: false, message: "Nama event maksimal 120 karakter." };
     if (description.length > 500)
       return { ok: false, message: "Deskripsi maksimal 500 karakter." };
-    if (coverImage.length > 500)
-      return { ok: false, message: "URL cover maksimal 500 karakter." };
 
     const { error } = await supabase
       .from("events")
       .update({
         name,
         description: description || null,
-        cover_image: coverImage || null,
       })
       .eq("id", id);
     if (error) throw error;
@@ -257,6 +274,50 @@ export async function updateEvent(
   }
 }
 
+/**
+ * Set an event's cover image by choosing one of its own photos.
+ *
+ * Security: the client only supplies photoId + eventId. We re-fetch the photo
+ * server-side, confirm it belongs to this event (photo.event_id === eventId),
+ * and use the DB-resolved storage_path. No arbitrary/raw Storage path is ever
+ * accepted from the browser. Admin authorization is enforced by requireAdminClient.
+ */
+export async function setEventCover(
+  eventId: string,
+  photoId: string
+): Promise<ActionState> {
+  try {
+    if (!eventId || !photoId)
+      return { ok: false, message: "Data cover tidak valid." };
+
+    const supabase = await requireAdminClient();
+
+    const { data: photo, error: photoError } = await supabase
+      .from("photos")
+      .select("id, event_id, storage_path")
+      .eq("id", photoId)
+      .maybeSingle();
+    if (photoError) throw photoError;
+    if (!photo) return { ok: false, message: "Foto tidak ditemukan." };
+    if (photo.event_id !== eventId)
+      return {
+        ok: false,
+        message: "Foto bukan milik event ini. Penetapan cover ditolak.",
+      };
+
+    const { error } = await supabase
+      .from("events")
+      .update({ cover_image: photo.storage_path })
+      .eq("id", eventId);
+    if (error) throw error;
+
+    invalidateAll();
+    return { ok: true, message: "Cover event diperbarui." };
+  } catch (error) {
+    return toActionState(error, "Gagal menetapkan cover event.");
+  }
+}
+
 export async function deleteEvent(
   _prev: ActionState,
   formData: FormData
@@ -267,18 +328,44 @@ export async function deleteEvent(
     const id = readString(formData, "id");
     if (!id) return { ok: false, message: "ID event tidak valid." };
 
-    const { count, error: photosError } = await supabase
+    const { data: event, error: eventError } = await supabase
+      .from("events")
+      .select("id")
+      .eq("id", id)
+      .maybeSingle();
+    if (eventError) throw eventError;
+    if (!event)
+      return { ok: false, message: "Event tidak ditemukan." };
+
+    // Collect photo storage_paths for this event.
+    const { data: photos, error: photosError } = await supabase
       .from("photos")
-      .select("id", { count: "exact", head: true })
+      .select("storage_path")
       .eq("event_id", id);
     if (photosError) throw photosError;
 
-    if ((count ?? 0) > 0)
-      return {
-        ok: false,
-        message: `Tidak aman menghapus: event ini masih memiliki ${count} foto. Hapus foto terlebih dahulu (fitur menyusul).`,
-      };
+    const photoPaths = (photos ?? [])
+      .map((row) => row.storage_path)
+      .filter((p): p is string => typeof p === "string" && p.length > 0);
 
+    // Storage-first: remove blobs before deleting rows. If Storage fails we
+    // abort and leave the database intact (avoids broken public gallery images).
+    if (photoPaths.length > 0) {
+      const cleanup = await removePhotoObjects(supabase, photoPaths);
+      if (!cleanup.ok) {
+        console.error(
+          "[deleteEvent] storage cleanup failed; aborting",
+          { eventId: id, failedCount: cleanup.failed.length }
+        );
+        return {
+          ok: false,
+          message:
+            "Gagal menghapus file foto dari storage. Penghapusan event dibatalkan agar data tidak rusak. Coba lagi.",
+        };
+      }
+    }
+
+    // FK CASCADE handles photos rows.
     const { error } = await supabase.from("events").delete().eq("id", id);
     if (error) throw error;
 

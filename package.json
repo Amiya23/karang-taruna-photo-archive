@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "tsc src/lib/download.ts --module esnext --target es2020 --moduleResolution bundler --outDir src/lib/.tmptest && node --test src/lib/download.test.mjs"
+    "test": "tsc src/lib/download.ts src/lib/storage-cleanup.ts src/lib/storage-format.ts --module esnext --target es2020 --moduleResolution bundler --outDir src/lib/.tmptest && node --test src/lib/download.test.mjs src/lib/storage-cleanup.test.mjs src/lib/storage-format.test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

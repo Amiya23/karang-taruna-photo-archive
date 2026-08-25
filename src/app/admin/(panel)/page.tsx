@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { getAdminStats, getRecentArchives } from "@/lib/supabase/queries";
+import { getAdminStats, getRecentArchives, getStorageUsageBytes } from "@/lib/supabase/queries";
+import { formatBytes } from "@/lib/storage-format";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Dashboard Admin — Karang Taruna",
+  title: "Dashboard Admin — Karang Taruna RT016",
 };
 
 const calendarIcon = (
@@ -31,15 +32,24 @@ const photoIcon = (
   </svg>
 );
 
+const storageIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} className="h-5 w-5" aria-hidden>
+    <ellipse cx="12" cy="6" rx="8" ry="3" />
+    <path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6" />
+    <path d="M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6" />
+  </svg>
+);
+
 export default async function AdminDashboardPage() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [stats, recentArchives] = await Promise.all([
+  const [stats, recentArchives, storageBytes] = await Promise.all([
     getAdminStats(),
     getRecentArchives(5),
+    getStorageUsageBytes(),
   ]);
 
   const displayName = user?.email?.split("@")[0] ?? "Admin";
@@ -48,6 +58,7 @@ export default async function AdminDashboardPage() {
     { label: "Tahun Arsip", value: stats.archives, accent: "bg-navy-900", icon: calendarIcon },
     { label: "Acara", value: stats.events, accent: "bg-gold-500 text-navy-950", icon: layersIcon },
     { label: "Foto", value: stats.photos, accent: "bg-flagred-600", icon: photoIcon },
+    { label: "Penyimpanan Digunakan", value: formatBytes(storageBytes), accent: "bg-emerald-600", icon: storageIcon },
   ];
 
   return (
@@ -57,11 +68,11 @@ export default async function AdminDashboardPage() {
           Selamat datang, {displayName}
         </h1>
         <p className="mt-1 text-sm text-charcoal/60">
-          Ringkasan arsip dokumentasi 17 Agustus Karang Taruna.
+          Ringkasan arsip dokumentasi 17 Agustus Karang Taruna RT016.
         </p>
       </header>
 
-      <section aria-label="Ringkasan statistik" className="grid gap-4 sm:grid-cols-3">
+      <section aria-label="Ringkasan statistik" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {statCards.map((card) => (
           <div
             key={card.label}

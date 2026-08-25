@@ -212,6 +212,52 @@ export async function getAdminStats(): Promise<AdminStats> {
   }
 }
 
+/**
+ * Total bytes stored in the "photos" Storage bucket.
+ *
+ * The photos table does NOT store file size, so we ask Supabase Storage directly.
+ * `list()` returns one folder level and exposes `metadata.size` for objects and
+ * `id` for folder markers. We walk the tree recursively. This is server-side
+ * only (uses the public client — the bucket is public and RLS allows listing) and
+ * never exposes a service-role key. No DB schema change is required.
+ *
+ * Returns 0 on any error (the card degrades gracefully to "0 B").
+ */
+export async function getStorageUsageBytes(): Promise<number> {
+  try {
+    const supabase = createPublicClient();
+    const bucket = "photos";
+    return await sumPrefix(supabase, bucket, "");
+  } catch (error) {
+    console.error("[getStorageUsageBytes]", error);
+    return 0;
+  }
+}
+
+async function sumPrefix(
+  supabase: ReturnType<typeof createPublicClient>,
+  bucket: string,
+  prefix: string
+): Promise<number> {
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .list(prefix, { limit: 1000, offset: 0, sortBy: { column: "name", order: "asc" } });
+  if (error) throw error;
+  if (!data || data.length === 0) return 0;
+
+  let total = 0;
+  for (const item of data) {
+    // Folder marker (no metadata.size) -> recurse into the sub-prefix.
+    if (item.metadata && typeof item.metadata.size === "number") {
+      total += item.metadata.size;
+    } else if (item.id) {
+      const nextPrefix = prefix ? `${prefix}/${item.name}` : item.name;
+      total += await sumPrefix(supabase, bucket, nextPrefix);
+    }
+  }
+  return total;
+}
+
 export type AdminArchiveRow = {
   id: string;
   year: number;

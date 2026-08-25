@@ -26,7 +26,7 @@ export default async function AdminLoginPage() {
       <div className="text-center">
         <h1 className="text-2xl font-bold text-navy-900">Login Admin</h1>
         <p className="mt-2 text-sm text-charcoal/70">
-          Area khusus pengelola Arsip Dokumentasi 17 Agustus Karang Taruna.
+          Area khusus pengelola Arsip Dokumentasi 17 Agustus Karang Taruna RT016.
         </p>
       </div>
       <LoginForm />

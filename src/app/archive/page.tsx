@@ -8,9 +8,9 @@ import { getArchives } from "@/lib/supabase/queries";
 export const revalidate = 300;
 
 export const metadata: Metadata = {
-  title: "Arsip Foto — Karang Taruna",
+  title: "Arsip Foto — Karang Taruna RT016",
   description:
-    "Daftar tahun dokumentasi perayaan kemerdekaan RI bersama Karang Taruna.",
+    "Daftar tahun dokumentasi perayaan kemerdekaan RI bersama Karang Taruna RT016.",
 };
 
 export default async function ArchivePage() {

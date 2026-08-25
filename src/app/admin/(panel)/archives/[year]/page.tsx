@@ -6,6 +6,7 @@ import { DeleteForm } from "@/components/admin/delete-form";
 import { Disclosure } from "@/components/admin/disclosure";
 import { PhotoUploader } from "@/components/admin/photo-uploader";
 import { PhotoManager } from "@/components/admin/photo-manager";
+import { CoverPicker } from "@/components/admin/cover-picker";
 import {
   createEvent,
   deleteEvent,
@@ -114,7 +115,6 @@ export default async function AdminYearEventsPage({ params }: PageProps) {
                       id: event.id,
                       name: event.name,
                       description: event.description,
-                      coverImage: event.coverImage,
                     }}
                   />
                 </Disclosure>
@@ -122,7 +122,7 @@ export default async function AdminYearEventsPage({ params }: PageProps) {
                 <DeleteForm
                   action={deleteEvent}
                   id={event.id}
-                  confirmMessage={`Hapus event "${event.name}"? Tindakan ini permanen.`}
+                  confirmMessage={`Hapus event "${event.name}"? Seluruh foto dan file-nya di storage akan ikut dihapus. Tindakan ini permanen.`}
                 />
               </div>
 
@@ -137,6 +137,10 @@ export default async function AdminYearEventsPage({ params }: PageProps) {
               <Disclosure label="Kelola Foto">
                 <PhotoManager eventId={event.id} />
               </Disclosure>
+
+              <div className="rounded-xl border border-cloudgray bg-white p-5 shadow-sm">
+                <CoverPicker eventId={event.id} currentCover={event.coverImage} />
+              </div>
             </li>
           ))}
         </ul>
@@ -144,8 +148,8 @@ export default async function AdminYearEventsPage({ params }: PageProps) {
 
       <p className="text-xs text-charcoal/45">
         Slug dihitung otomatis dari nama event dan dipakai pada URL publik
-        (contoh: {eventSlug("Nama Event")}). Penghapusan diblokir bila event
-        masih memiliki foto.
+        (contoh: {eventSlug("Nama Event")}). Menghapus event akan ikut
+        menghapus seluruh foto beserta file-nya di storage.
       </p>
     </div>
   );

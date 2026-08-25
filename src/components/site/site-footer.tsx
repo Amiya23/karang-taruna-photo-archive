@@ -18,10 +18,10 @@ export function SiteFooter() {
               className="h-9 w-auto"
             />
             <span className="text-sm text-offwhite/80">
-              Karang Taruna — Arsip Dokumentasi 17 Agustus
+              Arsip Dokumentasi Karang Taruna RT016/RW005 Kelurahan Cibubur
             </span>
           </Link>
-          <p className="text-xs">© {year} Karang Taruna</p>
+          <p className="text-xs">© {year} Karang Taruna RT016/RW005 Kelurahan Cibubur</p>
         </div>
       </div>
     </footer>

@@ -10,7 +10,6 @@ type EventFormProps = {
     id: string;
     name: string;
     description: string | null;
-    coverImage: string | null;
   };
   archiveId?: string;
   submitLabel: string;
@@ -75,20 +74,6 @@ export function EventForm({
           rows={2}
           maxLength={500}
           defaultValue={initial?.description ?? ""}
-          className={inputClass}
-        />
-      </label>
-
-      <label className="block text-sm">
-        <span className="mb-1 block font-medium text-charcoal">
-          Cover Image URL (opsional)
-        </span>
-        <input
-          type="text"
-          name="coverImage"
-          maxLength={500}
-          defaultValue={initial?.coverImage ?? ""}
-          placeholder="https://… atau path storage"
           className={inputClass}
         />
       </label>

@@ -21,9 +21,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title:
       year !== null
-        ? `Arsip ${year} — Karang Taruna`
-        : "Arsip — Karang Taruna",
-    description: `Dokumentasi perayaan kemerdekaan RI tahun ${rawYear} bersama Karang Taruna.`,
+        ? `Arsip ${year} — Karang Taruna RT016`
+        : "Arsip — Karang Taruna RT016",
+    description: `Dokumentasi perayaan kemerdekaan RI tahun ${rawYear} bersama Karang Taruna RT016.`,
   };
 }
 

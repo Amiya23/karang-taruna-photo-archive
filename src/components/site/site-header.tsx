@@ -21,7 +21,7 @@ export function SiteHeader() {
           />
           <span className="leading-tight">
             <span className="block text-sm font-semibold text-offwhite">
-              Karang Taruna
+              Karang Taruna RT016
             </span>
             <span className="block text-[11px] uppercase tracking-[0.2em] text-gold-300">
               Arsip 17 Agustus

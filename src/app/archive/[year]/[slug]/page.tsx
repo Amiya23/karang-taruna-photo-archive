@@ -20,9 +20,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title:
       year !== null
-        ? `Arsip ${year} — ${slug} — Karang Taruna`
-        : "Galeri Acara — Karang Taruna",
-    description: `Galeri foto acara ${slug} pada dokumentasi perayaan kemerdekaan RI bersama Karang Taruna.`,
+        ? `Arsip ${year} — ${slug} — Karang Taruna RT016`
+        : "Galeri Acara — Karang Taruna RT016",
+    description: `Galeri foto acara ${slug} pada dokumentasi perayaan kemerdekaan RI bersama Karang Taruna RT016.`,
   };
 }
 

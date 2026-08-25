@@ -101,7 +101,7 @@ export default async function AdminArchivesPage() {
                   <DeleteForm
                     action={deleteArchive}
                     id={archive.id}
-                    confirmMessage={`Hapus tahun ${archive.year} beserta ${eventCount} event di dalamnya? Tindakan ini permanen.`}
+                    confirmMessage={`Hapus tahun ${archive.year} beserta ${eventCount} event di dalamnya? Seluruh foto dan file-nya di storage akan ikut dihapus. Tindakan ini permanen.`}
                   />
                 </div>
               </li>

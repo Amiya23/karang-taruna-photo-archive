@@ -24,7 +24,7 @@ export function HomeHero({ photos, yearsCount }: HeroProps) {
         <div>
           <p className="inline-flex animate-fade-up items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-[11px] uppercase tracking-[0.22em] text-gold-300">
             <span className="h-1.5 w-1.5 rounded-full bg-flagred-500" />
-            Arsip Dokumentasi Karang Taruna
+            Arsip Dokumentasi Karang Taruna RT016/RW005 Kelurahan Cibubur
           </p>
 
           <h1 className="mt-6 text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl">
@@ -38,7 +38,7 @@ export function HomeHero({ photos, yearsCount }: HeroProps) {
           </h1>
 
           <p className="mt-6 max-w-md animate-fade-up text-base leading-relaxed text-offwhite/70 [animation-delay:360ms] sm:text-lg">
-            Kumpulan foto perayaan kemerdekaan RI bersama Karang Taruna —
+            Kumpulan foto perayaan kemerdekaan RI bersama Karang Taruna RT016 —
             dari lomba, karnaval, hingga tasyakuran. Satu tempat untuk
             menelusuri semangat tujuh belasan dari tahun ke tahun.
           </p>

@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Arsip Dokumentasi 17 Agustus — Karang Taruna",
+  title: "Arsip Dokumentasi 17 Agustus — Karang Taruna RT016",
   description:
-    "Arsip foto digital dokumentasi perayaan 17 Agustus Karang Taruna.",
+    "Arsip foto digital dokumentasi perayaan 17 Agustus Karang Taruna RT016.",
 };
 
 export default function RootLayout({
