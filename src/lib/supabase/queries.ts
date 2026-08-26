@@ -83,6 +83,120 @@ export async function getGalleryHighlights(
   }
 }
 
+export type HomepageSettings = {
+  heroPhoto1Id: string | null;
+  heroPhoto2Id: string | null;
+  heroPhoto3Id: string | null;
+};
+
+/**
+ * Read the singleton homepage settings row (public client — RLS allows public
+ * SELECT). Returns null when the row does not exist yet. Stores ONLY photo IDs.
+ */
+export async function getHomepageSettings(): Promise<HomepageSettings | null> {
+  try {
+    const supabase = createPublicClient();
+    const { data, error } = await supabase
+      .from("homepage_settings")
+      .select("hero_photo_1_id, hero_photo_2_id, hero_photo_3_id")
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return null;
+
+    return {
+      heroPhoto1Id: data.hero_photo_1_id ?? null,
+      heroPhoto2Id: data.hero_photo_2_id ?? null,
+      heroPhoto3Id: data.hero_photo_3_id ?? null,
+    };
+  } catch (error) {
+    console.error("[getHomepageSettings]", error);
+    return null;
+  }
+}
+
+/**
+ * Fetch the hero photos referenced by settings, in slot order (1,2,3).
+ * Only photos that still exist are returned; a missing/deleted photo yields no
+ * entry for that slot (caller fills gaps from fallback highlights). Reuses the
+ * public client — no credentials exposed.
+ */
+export async function getHeroPhotosByIds(
+  ids: (string | null)[]
+): Promise<GalleryPhoto[]> {
+  const validIds = ids.filter((id): id is string => typeof id === "string" && id.length > 0);
+  if (validIds.length === 0) return [];
+
+  try {
+    const supabase = createPublicClient();
+    const { data, error } = await supabase
+      .from("photos")
+      .select("id, storage_path, filename, caption")
+      .in("id", validIds);
+    if (error) throw error;
+
+    const found = (data ?? []).map(
+      (row): GalleryPhoto => ({
+        id: row.id,
+        storagePath: row.storage_path,
+        filename: row.filename ?? "",
+        caption: row.caption ?? null,
+        eventName: null,
+        year: null,
+      })
+    );
+
+    // Preserve slot order, skip missing/deleted photos, and never duplicate an
+    // ID across slots.
+    const result: GalleryPhoto[] = [];
+    const seen = new Set<string>();
+    for (const id of validIds) {
+      if (seen.has(id)) continue;
+      const photo = found.find((p) => p.id === id);
+      if (photo) {
+        result.push(photo);
+        seen.add(id);
+      }
+    }
+    return result;
+  } catch (error) {
+    console.error("[getHeroPhotosByIds]", error);
+    return [];
+  }
+}
+
+/**
+ * List recent photos for the admin Hero photo picker (cross-event). The browser
+ * only ever receives photo IDs + public metadata; the server action re-verifies
+ * existence before persisting. No arbitrary storage_path is sent to the client
+ * for selection beyond what the DB already exposes publicly.
+ */
+export async function getPhotosForHeroPicker(
+  limit = 200
+): Promise<GalleryPhoto[]> {
+  try {
+    const supabase = createPublicClient();
+    const { data, error } = await supabase
+      .from("photos")
+      .select("id, storage_path, filename, caption")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+
+    return (data ?? []).map((row) => ({
+      id: row.id,
+      storagePath: row.storage_path,
+      filename: row.filename ?? "",
+      caption: row.caption ?? null,
+      eventName: null,
+      year: null,
+    }));
+  } catch (error) {
+    console.error("[getPhotosForHeroPicker]", error);
+    return [];
+  }
+}
+
 export type ArchiveDetail = ArchiveSummary & {
   description: string | null;
 };

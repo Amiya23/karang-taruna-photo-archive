@@ -596,6 +596,100 @@ export async function deleteEvent(
   }
 }
 
+export async function saveHeroSettings(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  try {
+    const supabase = await requireAdminClient();
+
+    const id1 = readString(formData, "heroPhoto1Id");
+    const id2 = readString(formData, "heroPhoto2Id");
+    const id3 = readString(formData, "heroPhoto3Id");
+
+    const ids = [id1, id2, id3].filter(
+      (id) => id.length > 0
+    );
+
+    // Duplicate slot IDs are rejected before any DB write.
+    const uniqueIds = new Set(ids);
+    if (ids.length > 0 && uniqueIds.size !== ids.length) {
+      return {
+        ok: false,
+        message:
+          "Foto yang sama tidak boleh dipakai di lebih dari satu slot Hero.",
+      };
+    }
+
+    // Re-verify every supplied ID still exists in the photos table. The client
+    // never supplies a raw storage_path — only photo IDs — and we confirm each
+    // ID resolves to a real row before persisting.
+    if (ids.length > 0) {
+      const { data: found, error: findError } = await supabase
+        .from("photos")
+        .select("id")
+        .in("id", ids);
+      if (findError) throw findError;
+      const foundIds = new Set((found ?? []).map((row) => row.id));
+      const missing = ids.filter((id) => !foundIds.has(id));
+      if (missing.length > 0) {
+        return {
+          ok: false,
+          message: "Satu atau lebih foto yang dipilih tidak ditemukan.",
+        };
+      }
+    }
+
+    // Upsert the singleton row (fixed PK). Null slots are preserved as null.
+    const { error } = await supabase.from("homepage_settings").upsert(
+      {
+        id: "00000000-0000-0000-0000-000000000001",
+        hero_photo_1_id: id1 || null,
+        hero_photo_2_id: id2 || null,
+        hero_photo_3_id: id3 || null,
+      },
+      { onConflict: "id" }
+    );
+    if (error) throw error;
+
+    invalidateAll();
+    return { ok: true, message: "Pengaturan Hero homepage disimpan." };
+  } catch (error) {
+    return toActionState(error, "Gagal menyimpan pengaturan Hero.");
+  }
+}
+
+/** Clear any Hero slot that references a deleted photo so the homepage falls
+ *  back gracefully instead of keeping a broken reference. */
+async function clearHeroSlotsForPhoto(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  photoId: string
+): Promise<void> {
+  const { data: row, error: readError } = await supabase
+    .from("homepage_settings")
+    .select("hero_photo_1_id, hero_photo_2_id, hero_photo_3_id")
+    .maybeSingle();
+  if (readError) {
+    console.error("[clearHeroSlotsForPhoto] gagal baca settings", readError);
+    return;
+  }
+  if (!row) return;
+
+  const patch: Record<string, string | null> = {};
+  if (row.hero_photo_1_id === photoId) patch.hero_photo_1_id = null;
+  if (row.hero_photo_2_id === photoId) patch.hero_photo_2_id = null;
+  if (row.hero_photo_3_id === photoId) patch.hero_photo_3_id = null;
+  if (Object.keys(patch).length === 0) return;
+
+  const { error } = await supabase
+    .from("homepage_settings")
+    .update(patch)
+    .eq("id", "00000000-0000-0000-0000-000000000001");
+  if (error) {
+    console.error("[clearHeroSlotsForPhoto] gagal clear slot", error);
+  }
+}
+
 export async function revalidatePublicPages(): Promise<void> {
   await requireAdminClient();
   revalidatePath("/", "layout");
@@ -697,6 +791,10 @@ export async function deletePhotoById(
         .eq("id", eventId);
       if (coverError) throw coverError;
     }
+
+    // Hero safety: clear any homepage Hero slot that referenced this photo so
+    // the public homepage falls back gracefully (no broken reference).
+    await clearHeroSlotsForPhoto(supabase, photoId);
 
     invalidateAll();
     return { ok: true, message: "Foto berhasil dihapus." };

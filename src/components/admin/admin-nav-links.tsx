@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const items = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/archives", label: "Arsip Tahun" },
+  { href: "/admin/settings", label: "Pengaturan" },
 ];
 
 export function AdminNavLinks() {
