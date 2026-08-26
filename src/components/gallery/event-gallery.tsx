@@ -11,9 +11,18 @@ type EventGalleryProps = {
   year: number;
 };
 
+const PAGE_SIZE = 60;
+
 export function EventGallery({ photos, eventName, year }: EventGalleryProps) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [loadedIds, setLoadedIds] = useState<ReadonlySet<string>>(new Set());
+  const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
+
+  // Only the first PAGE_SIZE photos are rendered initially; "Load More"
+  // reveals the rest in fixed chunks. `photos` stays the single source of
+  // truth (ordering + lightbox prev/next), so no data is duplicated or refetched.
+  const visiblePhotos = photos.slice(0, visibleCount);
+  const hasMore = visibleCount < photos.length;
 
   const close = useCallback(() => setActiveIndex(null), []);
 
@@ -61,7 +70,7 @@ export function EventGallery({ photos, eventName, year }: EventGalleryProps) {
   return (
     <>
       <div className="columns-2 gap-4 sm:gap-5 md:columns-3 xl:columns-4">
-        {photos.map((photo, index) => {
+        {visiblePhotos.map((photo, index) => {
           const loaded = loadedIds.has(photo.id);
 
           return (
@@ -76,8 +85,11 @@ export function EventGallery({ photos, eventName, year }: EventGalleryProps) {
                 storagePath={photo.storagePath}
                 photoId={photo.id}
                 alt={photo.caption || photo.filename || `Foto ${index + 1}`}
-                width={960}
-                height={960}
+                width={320}
+                height={320}
+                quality={70}
+                sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1280px) 25vw, 320px"
+                className="object-cover"
                 onLoad={() => markLoaded(photo.id)}
               />
               {!loaded ? (
@@ -87,6 +99,23 @@ export function EventGallery({ photos, eventName, year }: EventGalleryProps) {
           );
         })}
       </div>
+
+      {hasMore ? (
+        <div className="mt-8 flex justify-center">
+          <button
+            type="button"
+            onClick={() =>
+              setVisibleCount((current) =>
+                Math.min(current + PAGE_SIZE, photos.length)
+              )
+            }
+            className="rounded-full bg-gold-500 px-6 py-3 text-sm font-semibold text-navy-950 transition-colors hover:bg-gold-400"
+          >
+            Tampilkan {Math.min(PAGE_SIZE, photos.length - visibleCount)} foto
+            lagi
+          </button>
+        </div>
+      ) : null}
 
       {activePhoto ? (
         <div
@@ -228,6 +257,7 @@ function GalleryImage({
   sizes,
   className,
   onLoad,
+  quality,
   width,
   height,
 }: {
@@ -239,6 +269,7 @@ function GalleryImage({
   sizes?: string;
   className?: string;
   onLoad?: () => void;
+  quality?: number;
   width?: number;
   height?: number;
 }) {
@@ -253,9 +284,10 @@ function GalleryImage({
       fill={fill}
       priority={priority}
       sizes={sizes}
+      className={className}
+      quality={quality}
       width={width}
       height={height}
-      className={className}
       onLoad={onLoad}
     />
   );
