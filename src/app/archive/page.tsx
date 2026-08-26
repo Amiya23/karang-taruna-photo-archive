@@ -4,7 +4,7 @@ import { SiteFooter } from "@/components/site/site-footer";
 import { YearCard } from "@/components/home/year-card";
 import { ArchiveEmptyState } from "@/components/shared/archive-empty-state";
 import { getArchives } from "@/lib/supabase/queries";
-import { resolvedImageUrl } from "@/lib/photo-url-server";
+import { resolveCoverUrl } from "@/lib/photo-url-server";
 
 export const revalidate = 300;
 
@@ -20,7 +20,7 @@ export default async function ArchivePage() {
     archives.map(async (archive) => ({
       archive,
       coverUrl: archive.coverImage
-        ? await resolvedImageUrl(archive.coverImage)
+        ? await resolveCoverUrl(archive.coverImage)
         : undefined,
     }))
   );

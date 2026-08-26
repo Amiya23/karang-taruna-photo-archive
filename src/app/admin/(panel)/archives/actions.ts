@@ -5,11 +5,17 @@ import { createClient } from "@/lib/supabase/server";
 import { checkUserAdmin } from "@/lib/is-admin";
 import { removePhotoObjectsHybrid } from "@/lib/storage-cleanup-hybrid";
 import { uploadObject, deleteObject } from "@/lib/b2/storage";
+import { uploadObject as uploadR2Object, deleteObject as deleteR2Object } from "@/lib/r2/storage";
 import { isB2Path, stripB2Prefix } from "@/lib/b2/path";
 
 /** Server-side feature flag: route NEW uploads to B2 when enabled. */
 function b2UploadEnabled(): boolean {
   return process.env.B2_UPLOAD_ENABLED === "true";
+}
+
+/** Server-side feature flag: route NEW uploads to Cloudflare R2 when enabled. */
+function r2UploadEnabled(): boolean {
+  return process.env.R2_UPLOAD_ENABLED === "true";
 }
 
 export type ActionState = { ok: boolean; message: string } | null;
@@ -434,6 +440,101 @@ export async function uploadPhotoToB2(
     return { ok: true, message: "Foto berhasil diunggah ke B2." };
   } catch {
     return { ok: false, message: "Gagal mengunggah foto ke B2." };
+  }
+}
+
+/**
+ * Upload a NEW photo to Cloudflare R2 and insert the DB row.
+ *
+ * Mirrors uploadPhotoToB2 but stores with an "r2:"-prefixed storage_path.
+ * Gated by R2_UPLOAD_ENABLED (defaults to false — R2 is NOT the default
+ * provider and B2_UPLOAD_ENABLED behavior is unchanged). R2 credentials stay
+ * server-side (this is a server action). Rollback: if the DB insert fails
+ * after a successful R2 upload, the orphan R2 object is deleted so we never
+ * leave dangling blobs. No duplicate DB rows are created.
+ */
+export async function uploadPhotoToR2(
+  _prev: UploadPhotoState,
+  formData: FormData
+): Promise<UploadPhotoState> {
+  try {
+    if (!r2UploadEnabled()) {
+      return { ok: false, message: "Upload R2 tidak diaktifkan." };
+    }
+
+    const supabase = await requireAdminClient();
+
+    const eventId = readString(formData, "eventId");
+    const year = readString(formData, "year");
+    const file = formData.get("file");
+
+    if (!eventId || !year) {
+      return { ok: false, message: "Parameter tidak valid." };
+    }
+    if (!(file instanceof File)) {
+      return { ok: false, message: "File tidak ditemukan." };
+    }
+    if (!B2_ACCEPTED_TYPES.has(file.type)) {
+      return { ok: false, message: "Tipe tidak didukung (hanya JPEG/PNG/WebP)." };
+    }
+    if (file.size > B2_MAX_SIZE) {
+      return { ok: false, message: "Ukuran melebihi 10 MB." };
+    }
+    if (file.size === 0) {
+      return { ok: false, message: "File kosong." };
+    }
+
+    // Verify the event exists (authz preserved by requireAdminClient).
+    const { data: event, error: eventError } = await supabase
+      .from("events")
+      .select("id, cover_image")
+      .eq("id", eventId)
+      .maybeSingle();
+    if (eventError) throw eventError;
+    if (!event) return { ok: false, message: "Event tidak ditemukan." };
+
+    const key = `${year}/${eventId}/${Date.now()}-${sanitizePhotoFilename(
+      file.name
+    )}`;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+
+    // Storage-first: upload blob before inserting the DB row.
+    await uploadR2Object(key, bytes, file.type || "image/jpeg");
+
+    const storagePath = `r2:${key}`;
+    const { error: insertError } = await supabase.from("photos").insert({
+      event_id: eventId,
+      storage_path: storagePath,
+      filename: file.name,
+    });
+
+    if (insertError) {
+      // Rollback the orphan R2 object.
+      try {
+        await deleteR2Object(key);
+      } catch {
+        console.error("[uploadPhotoToR2] rollback gagal hapus R2 object", {
+          key,
+        });
+      }
+      return { ok: false, message: "Gagal menyimpan metadata foto." };
+    }
+
+    // Auto-cover: only if the event has no cover yet (mirrors existing behavior).
+    if (!event.cover_image) {
+      const { error: coverError } = await supabase
+        .from("events")
+        .update({ cover_image: storagePath })
+        .eq("id", eventId);
+      if (coverError) {
+        console.warn("[uploadPhotoToR2] gagal set cover otomatis", coverError);
+      }
+    }
+
+    invalidateAll();
+    return { ok: true, message: "Foto berhasil diunggah ke R2." };
+  } catch {
+    return { ok: false, message: "Gagal mengunggah foto ke R2." };
   }
 }
 

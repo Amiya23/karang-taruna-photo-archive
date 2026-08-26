@@ -74,6 +74,7 @@ export function EventGallery({ photos, eventName, year }: EventGalleryProps) {
             >
               <GalleryImage
                 storagePath={photo.storagePath}
+                photoId={photo.id}
                 alt={photo.caption || photo.filename || `Foto ${index + 1}`}
                 width={960}
                 height={960}
@@ -167,6 +168,7 @@ export function EventGallery({ photos, eventName, year }: EventGalleryProps) {
             <div className="relative mx-auto min-h-0 w-full max-w-5xl flex-1 self-stretch">
               <GalleryImage
                 storagePath={activePhoto.storagePath}
+                photoId={activePhoto.id}
                 alt={activePhoto.caption || activePhoto.filename || "Foto"}
                 fill
                 priority
@@ -219,6 +221,7 @@ export function EventGallery({ photos, eventName, year }: EventGalleryProps) {
  */
 function GalleryImage({
   storagePath,
+  photoId,
   alt,
   fill,
   priority,
@@ -229,6 +232,7 @@ function GalleryImage({
   height,
 }: {
   storagePath: string;
+  photoId?: string;
   alt: string;
   fill?: boolean;
   priority?: boolean;
@@ -238,7 +242,7 @@ function GalleryImage({
   width?: number;
   height?: number;
 }) {
-  const url = usePhotoUrl(storagePath);
+  const url = usePhotoUrl({ id: photoId, storagePath });
   if (!url) {
     return <div className="absolute inset-0 animate-pulse bg-cloudgray" />;
   }

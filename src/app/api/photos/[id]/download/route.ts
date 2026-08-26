@@ -49,6 +49,12 @@ export async function GET(
     const data = await getObjectBytes(stripB2Prefix(photo.storage_path));
     bytes = new Uint8Array(data).buffer;
     contentType = "image/jpeg";
+  } else if (photo.storage_path.startsWith("r2:")) {
+    const { getObjectBytes } = await import("@/lib/r2/storage");
+    const { stripR2Prefix } = await import("@/lib/r2/path");
+    const data = await getObjectBytes(stripR2Prefix(photo.storage_path));
+    bytes = new Uint8Array(data).buffer;
+    contentType = "image/jpeg";
   } else {
     const { data: file, error: downloadError } = await supabase.storage
       .from("photos")

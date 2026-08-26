@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
-import { revalidatePublicPages, uploadPhotoToB2 } from "@/app/admin/(panel)/archives/actions";
+import { revalidatePublicPages, uploadPhotoToB2, uploadPhotoToR2 } from "@/app/admin/(panel)/archives/actions";
 
 type UploadStatus = "queued" | "uploading" | "success" | "failed";
 
@@ -84,11 +84,13 @@ export function PhotoUploader({
   eventId,
   eventCover,
   b2Enabled = false,
+  r2Enabled = false,
 }: {
   year: number;
   eventId: string;
   eventCover: string | null;
   b2Enabled?: boolean;
+  r2Enabled?: boolean;
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -156,6 +158,52 @@ export function PhotoUploader({
     setIsUploading(true);
     setSummary(null);
     setOverall({ done: 0, total: pending.length });
+
+    // --- R2 path: NEW uploads routed to Cloudflare R2 via a server action. ---
+    // Mirrors the B2 path. R2_UPLOAD_ENABLED gate lives in the server action,
+    // so this branch is only taken when the admin page passes r2Enabled=true.
+    if (r2Enabled) {
+      let successCount = 0;
+      let failCount = 0;
+      for (const job of pending) {
+        updateItem(job.id, { status: "uploading", progress: 0, error: undefined });
+        const formData = new FormData();
+        formData.append("eventId", eventId);
+        formData.append("year", String(year));
+        formData.append("file", job.file);
+        try {
+          const result = await uploadPhotoToR2(
+            { ok: false, message: "" },
+            formData
+          );
+          if (result.ok) {
+            updateItem(job.id, { status: "success", progress: 100 });
+            successCount += 1;
+          } else {
+            updateItem(job.id, {
+              status: "failed",
+              error: result.message || "Upload gagal",
+            });
+            failCount += 1;
+          }
+        } catch {
+          updateItem(job.id, { status: "failed", error: "Upload gagal" });
+          failCount += 1;
+        }
+        setOverall({ done: successCount + failCount, total: pending.length });
+      }
+
+      setSummary({ success: successCount, failed: failCount });
+      setIsUploading(false);
+      runningRef.current = false;
+      if (successCount > 0) {
+        try {
+          await revalidatePublicPages();
+        } catch {}
+        router.refresh();
+      }
+      return;
+    }
 
     // --- B2 path: NEW uploads routed to Backblaze B2 via a server action. ---
     // Credentials never reach the browser; the server action uploads the bytes.
@@ -323,7 +371,7 @@ export function PhotoUploader({
       } catch {}
       router.refresh();
     }
-  }, [b2Enabled, eventId, eventCover, queue, router, updateItem, year]);
+  }, [b2Enabled, r2Enabled, eventId, eventCover, queue, router, updateItem, year]);
 
   const queuedCount = queue.filter((item) => item.status === "queued").length;
   const overallPercent =

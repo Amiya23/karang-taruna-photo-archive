@@ -6,7 +6,7 @@ import { SiteFooter } from "@/components/site/site-footer";
 import { EventCard } from "@/components/archive/event-card";
 import { EventsEmptyState } from "@/components/archive/events-empty-state";
 import { getArchiveByYear, getEventsByArchive } from "@/lib/supabase/queries";
-import { resolvedImageUrl } from "@/lib/photo-url-server";
+import { resolveCoverUrl } from "@/lib/photo-url-server";
 import { parseYearParam as parseYear } from "@/lib/route-params";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +41,7 @@ export default async function YearPage({ params }: PageProps) {
     events.map(async (event) => ({
       event,
       coverUrl: event.coverImage
-        ? await resolvedImageUrl(event.coverImage)
+        ? await resolveCoverUrl(event.coverImage)
         : undefined,
     }))
   );

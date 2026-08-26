@@ -40,6 +40,7 @@ export default async function AdminYearEventsPage({ params }: PageProps) {
 
   const events = await getEventsByArchive(archive.id);
   const b2Enabled = process.env.B2_UPLOAD_ENABLED === "true";
+  const r2Enabled = process.env.R2_UPLOAD_ENABLED === "true";
 
   return (
     <div className="space-y-6">
@@ -133,6 +134,7 @@ export default async function AdminYearEventsPage({ params }: PageProps) {
                   eventId={event.id}
                   eventCover={event.coverImage}
                   b2Enabled={b2Enabled}
+                  r2Enabled={r2Enabled}
                 />
               </Disclosure>
 

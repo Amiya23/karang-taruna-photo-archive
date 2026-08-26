@@ -146,7 +146,7 @@ export function CoverPicker({
                       : "ring-black/10 hover:ring-navy-600/40"
                   } ${pendingId !== null ? "opacity-70" : ""}`}
                 >
-                  <CoverPhotoImage storagePath={photo.storagePath} alt={photo.filename || "Foto event"} />
+                  <CoverPhotoImage storagePath={photo.storagePath} photoId={photo.id} alt={photo.filename || "Foto event"} />
                   {isCover ? (
                     <span className="absolute bottom-1 left-1 rounded-full bg-gold-500 px-2 py-0.5 text-[10px] font-semibold text-navy-950">
                       Cover
@@ -168,8 +168,8 @@ export function CoverPicker({
 }
 
 /** Per-photo thumbnail that resolves B2 presigned URLs server-side via usePhotoUrl. */
-function CoverPhotoImage({ storagePath, alt }: { storagePath: string; alt: string }) {
-  const url = usePhotoUrl(storagePath);
+function CoverPhotoImage({ storagePath, photoId, alt }: { storagePath: string; photoId?: string; alt: string }) {
+  const url = usePhotoUrl({ id: photoId, storagePath });
   if (!url) {
     return <div className="absolute inset-0 animate-pulse bg-cloudgray" />;
   }

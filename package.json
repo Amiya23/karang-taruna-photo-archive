@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "tsc src/lib/download.ts src/lib/storage-cleanup.ts src/lib/storage-format.ts src/lib/b2/path.ts src/lib/cache-ttl.ts --module esnext --target es2020 --moduleResolution bundler --outDir src/lib/.tmptest && node --test src/lib/download.test.mjs src/lib/storage-cleanup.test.mjs src/lib/storage-format.test.mjs src/lib/b2/path.test.mjs src/lib/cache-ttl.test.mjs"
+    "test": "tsc src/lib/download.ts src/lib/storage-cleanup.ts src/lib/storage-format.ts src/lib/b2/path.ts src/lib/cache-ttl.ts src/lib/photo-url.ts src/lib/r2/path.ts --module esnext --target es2020 --moduleResolution bundler --outDir src/lib/.tmptest && node --test src/lib/download.test.mjs src/lib/storage-cleanup.test.mjs src/lib/storage-format.test.mjs src/lib/b2/path.test.mjs src/lib/cache-ttl.test.mjs src/lib/photo-url.test.mjs src/lib/r2/path.test.mjs src/lib/r2/routing.test.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1117.0",
