@@ -7,6 +7,7 @@ import { removePhotoObjectsHybrid } from "@/lib/storage-cleanup-hybrid";
 import { uploadObject, deleteObject } from "@/lib/b2/storage";
 import { uploadObject as uploadR2Object, deleteObject as deleteR2Object } from "@/lib/r2/storage";
 import { isB2Path, stripB2Prefix } from "@/lib/b2/path";
+import { stripExif } from "@/lib/image-strip-exif";
 
 /** Server-side feature flag: route NEW uploads to B2 when enabled. */
 function b2UploadEnabled(): boolean {
@@ -403,8 +404,11 @@ export async function uploadPhotoToB2(
     )}`;
     const bytes = new Uint8Array(await file.arrayBuffer());
 
+    // Strip EXIF to prevent camera metadata (make/model, timestamps) from leaking.
+    const strippedBytes = await stripExif(Buffer.from(bytes), file.type || undefined);
+
     // Storage-first: upload blob before inserting the DB row.
-    await uploadObject(key, bytes, file.type || "image/jpeg");
+    await uploadObject(key, strippedBytes, file.type || "image/jpeg");
 
     const storagePath = `b2:${key}`;
     const { error: insertError } = await supabase.from("photos").insert({
@@ -498,8 +502,11 @@ export async function uploadPhotoToR2(
     )}`;
     const bytes = new Uint8Array(await file.arrayBuffer());
 
+    // Strip EXIF to prevent camera metadata (make/model, timestamps) from leaking.
+    const strippedBytes = await stripExif(Buffer.from(bytes), file.type || undefined);
+
     // Storage-first: upload blob before inserting the DB row.
-    await uploadR2Object(key, bytes, file.type || "image/jpeg");
+    await uploadR2Object(key, strippedBytes, file.type || "image/jpeg");
 
     const storagePath = `r2:${key}`;
     const { error: insertError } = await supabase.from("photos").insert({
